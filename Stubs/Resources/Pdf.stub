@@ -1,0 +1,22 @@
+@extends('layouts.layouts-pdf')
+
+@section('title', '{{ reportTitle }}')
+
+@section('content')
+    <table border="1" cellspacing="0" cellpadding="5">
+        <thead>
+            <tr>
+                <th>No.</th>
+                {{ tableHeaders }}
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($data as $index => $a)
+                <tr>
+                    <td>{{ $index + 1 }}</td>
+                    {{ tableRows }}
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+@endsection

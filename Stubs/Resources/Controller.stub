@@ -1,0 +1,178 @@
+<?php
+
+namespace App\{{ module }}\Controllers;
+
+use App\{{ module }}\Requests\{{ class }}\{{ class }}Request;
+use App\{{ module }}\Requests\{{ class }}\{{ class }}IndexRequest;
+use App\{{ module }}\Requests\{{ class }}\{{ class }}FileRequest;
+use App\{{ module }}\Services\{{ class }}Service;
+use Barryvdh\DomPDF\Facade\Pdf;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller as BaseController;
+
+class {{ class }}Controller extends BaseController
+{
+    protected {{ class }}Service $service;
+
+    public function __construct({{ class }}Service $service)
+    {
+        $this->service = $service;
+
+        $permissions = [
+            'index'       => 'view_{{ class | lower }}s|view_any_{{ class | lower }}s',
+            'show'        => 'view_{{ class | lower }}s|view_any_{{ class | lower }}s',
+            'store'       => 'create_{{ class | lower }}s',
+            'update'      => 'update_{{ class | lower }}s',
+            'destroy'     => 'delete_{{ class | lower }}s|delete_any_{{ class | lower }}s',
+            'delete'      => 'forcedelete_{{ class | lower }}s|forcedelete_any_{{ class | lower }}s',
+            'forceDelete' => 'forcedelete_{{ class | lower }}s|forcedelete_any_{{ class | lower }}s',
+            'restore'     => 'restore_{{ class | lower }}s',
+            'export'      => 'export_{{ class | lower }}s',
+            'import'      => 'import_{{ class | lower }}s',
+        ];
+
+        foreach ($permissions as $method => $permission) {
+            $this->middleware("permission:{$permission},sanctum", ['only' => [$method]]);
+        }
+    }
+
+    public function index({{ class }}IndexRequest $request)
+    {
+        $validated = $request->validated();
+
+        return response()->json($this->service->paginate(
+            $validated['page'],
+            $validated['limit'],
+            $validated['search'] ?? [],
+            $validated['sortBy'] ?? []
+        ));
+    }
+
+    public function create()
+    {
+        return response()->json([
+            'form' => $this->service->form()
+        ]);
+    }
+
+    public function store({{ class }}Request $request)
+    {
+        return response()->json($this->service->create($request->validated()));
+    }
+
+    public function show($id)
+    {
+        return response()->json($this->service->find($id));
+    }
+
+    public function edit($id)
+    {
+        return response()->json([
+            'data' => $this->service->find($id),
+            'form' => $this->service->form()
+        ]);
+    }
+
+    public function update({{ class }}Request $request, $id)
+    {
+        return response()->json($this->service->update($id, $request->validated()));
+    }
+
+    public function destroy($id)
+    {
+        return response()->json($this->service->delete($id));
+    }
+
+    public function restore($id)
+    {
+        return response()->json($this->service->restore($id));
+    }
+
+    public function forceDelete($id)
+    {
+        return response()->json($this->service->forceDelete($id));
+    }
+
+    public function deleted(Request $request)
+    {
+        $validated = $request->validate([
+            'page' => 'required|integer|min:1',
+            'limit' => 'required|integer|min:1|max:100',
+            'search' => 'nullable|array',
+            'search.nip' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        return response()->json($this->service->paginateTrashed(
+            $validated['page'],
+            $validated['limit'],
+            $validated['search']
+        ));
+    }
+
+    public function print({{ class }}FileRequest $request)
+    {
+        $validated = $request->validated();
+
+        $data = $this->service->export(
+            $validated['name'] ?? null,
+            $validated['createdAt'] ?? null,
+            $validated['updatedAt'] ?? null,
+            $validated['startRange'] ?? null,
+            $validated['endRange'] ?? null
+        );
+
+        $pdf = Pdf::loadView('pdf.{{ class }}', ['data' => $data]);
+        $filename = '{{ class }}-' . now()->format('YmdHis') . '.pdf';
+
+        return response($pdf->output(), 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+    }
+
+    public function xlsx({{ class }}FileRequest $request)
+    {
+        $validated = $request->validated();
+
+        $data = $this->service->export(
+            $validated['name'] ?? null,
+            $validated['createdAt'] ?? null,
+            $validated['updatedAt'] ?? null,
+            $validated['startRange'] ?? null,
+            $validated['endRange'] ?? null
+        );
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $headers = [/**tulis header xlsx anda disini**/];
+        $sheet->fromArray($headers, null, 'A1');
+
+        $row = 2;
+        foreach ($data as $index => $val) {
+            $sheet->fromArray([
+                $index + 1,
+                /**tulis value xlsx anda disini**/
+                //$val->created_at->format('Y-m-d H:i:s'),
+                //$val->updated_at->format('Y-m-d H:i:s')
+            ], null, 'A' . $row);
+            $row++;
+        }
+
+        $fileName = 'data_{{ class }}_' . now()->format('Ymd_His') . '.xlsx';
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'max-age=0',
+        ]);
+    }
+
+    public function import(Request $request)
+    {
+        return response()->json($this->service->import($request));
+    }
+}
