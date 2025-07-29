@@ -332,14 +332,13 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
 
         $userId = $data['user_id'] ?? Auth::id();
         $exec = DB::select("CALL {$procedure}(?,?,?,?,?,?)", [
-            $userId,
-            $data['time_id'],
-            $data['lat'],
-            $data['long'],
-            $data['image'],
-            $data['time']
+            (int)$userId,
+            (int)$data['time_id'],
+            (float)$data['lat'],
+            (float)$data['long'],
+            (string)$data['image'],
+            (string)$data['time']
         ]);
-
         return $exec[0]->success === 1;
     }
 
