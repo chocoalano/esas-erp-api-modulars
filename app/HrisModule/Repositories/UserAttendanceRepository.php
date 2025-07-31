@@ -143,7 +143,8 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
 
     public function registration_and_generate_qrcode(int $departement_id, int $shift_id, string $type_presence): mixed
     {
-        $currentTime = now(config('app.timezone'));
+        $timezone = config('app.timezone');
+        $currentTime = now($timezone);
         $expiresAt = $currentTime->copy()->addSeconds(10);
         $token = Crypt::encryptString($currentTime->format('Y-m-d H:i:s'));
 
@@ -151,8 +152,8 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
             'type' => $type_presence,
             'departement_id' => $departement_id,
             'timework_id' => $shift_id,
-            'for_presence' => $currentTime,
-            'expires_at' => $expiresAt,
+            'for_presence' => $currentTime->copy()->timezone($timezone)->toDateTimeString(),
+            'expires_at' => $expiresAt->copy()->timezone($timezone)->toDateTimeString(),
         ]);
     }
 
@@ -332,12 +333,12 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
 
         $userId = $data['user_id'] ?? Auth::id();
         $exec = DB::select("CALL {$procedure}(?,?,?,?,?,?)", [
-            (int)$userId,
-            (int)$data['time_id'],
-            (float)$data['lat'],
-            (float)$data['long'],
-            (string)$data['image'],
-            (string)$data['time']
+            (int) $userId,
+            (int) $data['time_id'],
+            (float) $data['lat'],
+            (float) $data['long'],
+            (string) $data['image'],
+            (string) $data['time']
         ]);
         return $exec[0]->success === 1;
     }
