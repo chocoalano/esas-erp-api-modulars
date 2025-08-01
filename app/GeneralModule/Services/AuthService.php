@@ -86,7 +86,6 @@ class AuthService
     {
         return ActivityLog::query()
             ->where('user_id', Auth::id())
-            ->whereDate('created_at', Carbon::today())
             ->latest('id')
             ->limit(10)
             ->get();
@@ -118,15 +117,11 @@ class AuthService
     public function setup_token(string $token): mixed
     {
         $user = Auth::user();
-
-        // Pastikan user ada dan relasi fcm_token tidak null
         if ($user && $user->fcm_token) {
             return $user->fcm_token->update([
                 'device_token' => $token,
             ]);
         }
-
-        // Jika belum ada token, buat baru
         return $user->fcm_token()->create([
             'device_token' => $token,
         ]);
