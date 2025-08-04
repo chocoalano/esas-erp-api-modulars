@@ -3,6 +3,7 @@
 namespace App\GeneralModule\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
 class UserRequest extends FormRequest
@@ -20,33 +21,44 @@ class UserRequest extends FormRequest
      */
     public function rules(): array
     {
-        $user = $this->route('users');
-        $userId = $user?->id ?? $this->route('id');
+        $routeUser = $this->route('users');
+        $userId = null;
+
+        if ($routeUser instanceof \App\Models\User) {
+            $userId = $routeUser->id;
+        } elseif ($this->route('id')) {
+            $userId = $this->route('id');
+        } else {
+            $userId = Auth::id(); // fallback ke user yang sedang login
+        }
 
         return [
             'company_id' => ['required', 'integer', 'exists:companies,id'],
             'name' => ['required', 'string', 'max:255'],
-            // Untuk NIP, abaikan record dengan ID ini di tabel 'users'
+
             'nip' => [
                 'required',
                 'string',
                 'max:50',
-                // 'unique:users,nip,' . $userId . ',id',
+                Rule::unique('users', 'nip')->ignore($userId),
             ],
-            // Untuk Email, abaikan record dengan ID ini di tabel 'users'
+
             'email' => [
                 'required',
                 'email',
                 'max:255',
-                'unique:users,email,' . $userId . ',id',
+                Rule::unique('users', 'email')->ignore($userId),
             ],
+
             'password' => [$this->isMethod('post') ? 'required' : 'nullable', 'string', 'max:20'],
+
             'status' => ['required', 'in:active,inactive,resign'],
+
             'details.phone' => [
                 'required',
                 'string',
                 'max:20',
-                'unique:user_details,phone,' . $userId . ',user_id',
+                Rule::unique('user_details', 'phone')->ignore($userId, 'user_id'),
             ],
             'details.placebirth' => ['required', 'string', 'max:100'],
             'details.datebirth' => ['required', 'date'],
@@ -56,7 +68,7 @@ class UserRequest extends FormRequest
             'details.religion' => ['required', 'in:islam,protestan,khatolik,hindu,buddha,khonghucu'],
 
             'address.identity_type' => ['required', 'in:ktp,sim,passport'],
-            'address.identity_numbers' => ['required', 'string', 'max:100'], // Unique for identity_numbers is usually based on identity_type as well
+            'address.identity_numbers' => ['required', 'string', 'max:100'],
             'address.province' => ['required', 'string', 'max:100'],
             'address.city' => ['required', 'string', 'max:100'],
             'address.citizen_address' => ['required', 'string', 'max:255'],
@@ -68,7 +80,6 @@ class UserRequest extends FormRequest
             'employee.departement_id' => ['required', 'integer', 'exists:departements,id'],
             'employee.job_position_id' => ['required', 'integer', 'exists:job_positions,id'],
             'employee.job_level_id' => ['required', 'integer', 'exists:job_levels,id'],
-            // Pastikan users,id ini mengacu pada user aktif yang ada
             'employee.approval_line_id' => ['required', 'integer', 'exists:users,id'],
             'employee.approval_manager_id' => ['required', 'integer', 'exists:users,id'],
             'employee.join_date' => ['required', 'date'],
@@ -77,12 +88,12 @@ class UserRequest extends FormRequest
             'employee.bank_number' => ['required', 'string', 'max:30'],
             'employee.bank_holder' => ['required', 'string', 'max:100'],
 
-            'avatar_file' => [ // Perhatikan ini harus sesuai dengan nama input file di frontend (avatar_file atau avatar)
-                'nullable', // Mengizinkan avatar kosong/tidak diunggah
+            'avatar_file' => [
+                'nullable',
                 'file',
                 'image',
                 'mimes:jpg,jpeg,png,webp,heic,heif',
-                'max:10048', // 10 MB
+                'max:10048',
             ],
         ];
     }

@@ -29,8 +29,11 @@ class AuthController extends BaseController
     public function profile_update(UserRequest $request)
     {
         $input = $request->validated();
-        $file = $request->file('avatar');
-        return response()->json($this->service->profileAuthUpdate($input, $file));
+        $file = $request->hasFile('avatar') ? $request->file('avatar') : null;
+
+        $result = $this->service->profileAuthUpdate($input, $file);
+
+        return response()->json($result);
     }
     public function refresh_token()
     {
