@@ -281,10 +281,8 @@ class PermitRepository implements PermitRepositoryInterface
             ->first();
 
         if (!$model) {
-            return null; // atau throw jika lebih sesuai
+            return null;
         }
-
-        // Ambil approval milik user tertentu
         $approval = $model->approvals->firstWhere('user_id', $userId);
 
         if ($approval) {

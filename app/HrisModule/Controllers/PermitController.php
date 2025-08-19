@@ -128,7 +128,7 @@ class PermitController extends BaseController
     {
         $input = $request->validate([
             'user_approve' => 'required|in:y,w,n',
-            'notes' => 'required|string|max:100',
+            'notes' => 'required_if:user_approve,n|nullable|string|max:100',
         ]);
         $proses = $this->service->approve($id, Auth::id(), $input);
         return response()->json($proses, !is_null($proses) ? 200 : 500);

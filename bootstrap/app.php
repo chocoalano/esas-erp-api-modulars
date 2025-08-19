@@ -13,14 +13,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // Alias middleware untuk penggunaan di route
+        $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
-
-        // Tangani redirect untuk guest pada API routes
         $middleware->redirectGuestsTo(function (Request $request) {
             if ($request->is('api/*')) {
                 return route('unauthorized');
