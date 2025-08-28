@@ -88,20 +88,22 @@ return new class extends Migration
                     'p_user_id',
                     CURRENT_TIMESTAMP()
                 );
+                UPDATE users SET is_attendance = 1 WHERE id=p_user_id;
             ELSE
                 -- Perbarui data attendance yang ada
-                UPDATE user_attendances
-                SET
-                    user_timework_schedule_id = v_schedule_id,
-                    time_in = p_time,
-                    lat_in = p_lat,
-                    long_in = p_long,
-                    image_in = p_image,
-                    status_in = v_status,
-                    type_in = 'face-device',
-                    updated_by = p_user_id,
-                    updated_at = CURRENT_TIMESTAMP()
-                WHERE id = v_attendance_id;
+                -- UPDATE user_attendances
+                -- SET
+                --     user_timework_schedule_id = v_schedule_id,
+                --     time_in = p_time,
+                --     lat_in = p_lat,
+                --     long_in = p_long,
+                --     image_in = p_image,
+                --     status_in = v_status,
+                --     type_in = 'face-device',
+                --     updated_by = p_user_id,
+                --     updated_at = CURRENT_TIMESTAMP()
+                -- WHERE id = v_attendance_id;
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Attendance is current added before';
             END IF;
 
             -- Commit the transaction jika tidak ada error

@@ -167,9 +167,15 @@ class PermitRepository implements PermitRepositoryInterface
             )
             ->get();
         $targetUser = $userId ?: auth()->id();
+
+        $today = Carbon::now('Asia/Jakarta')->toDateString();
+        $from = Carbon::now('Asia/Jakarta')->subMonth()->toDateString();
+
         $schedules = UserTimeworkSchedule::with('timework')
             ->where('user_id', $targetUser)
+            ->whereBetween('work_day', [$from, $today])
             ->when($scheduleId, fn($q, $s) => $q->where('id', $s))
+            ->orderByDesc('work_day')
             ->get();
         $timeworks = TimeWorke::query()
             ->when($companyId, fn($q, $c) => $q->where('company_id', $c))

@@ -64,6 +64,7 @@ BEGIN
                     updated_by = p_user_id,
                     updated_at = CURRENT_TIMESTAMP()
                 WHERE id = v_attendance_id;
+                UPDATE users SET is_attendance = 0 WHERE id=p_user_id;
                 -- Commit the transaction
                 COMMIT;
                 -- Set exit code to true
