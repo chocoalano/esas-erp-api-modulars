@@ -416,22 +416,63 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
         ?string $startRange = null,
         ?string $endRange = null
     ): mixed {
-        $query = $this->model->newQuery();
-        $query->with(['user', 'schedule', 'qrPresenceTransactions']);
-        $query
-            ->when($name, fn($q) => $q->where('name', 'like', "%{$name}%"))
-            ->when($createdAt, fn($q) => $q->whereDate('created_at', $createdAt))
-            ->when($updatedAt, fn($q) => $q->whereDate('updated_at', $updatedAt))
-            ->when($startRange, fn($q) => $q->whereDate('created_at', '>=', $startRange))
-            ->when($endRange, fn($q) => $q->whereDate('created_at', '<=', $endRange));
+        // Normalisasi input
+        $name = $name ? trim($name) : null;
+        $createdAt = $createdAt ? trim($createdAt) : null;
+        $updatedAt = $updatedAt ? trim($updatedAt) : null;
+        $startRange = $startRange ? trim($startRange) : null;
+        $endRange = $endRange ? trim($endRange) : null;
+
+        // Atur timezone lokal jika diperlukan
+        $tz = 'Asia/Jakarta';
+
+        $query = $this->model->newQuery()
+            ->with(['user', 'schedule', 'qrPresenceTransactions'])
+            // pastikan user tidak soft-deleted
+            ->whereHas('user', function ($u) {
+                // gunakan nama tabel "users" agar jelas
+                $u->whereNull('users.deleted_at');
+            });
+
+        // Filter nama pada relasi user
+        if (!empty($name)) {
+            $query->whereHas('user', function ($u) use ($name) {
+                $u->where('users.name', 'like', '%' . $name . '%');
+            });
+        }
+
+        // Filter tanggal spesifik (tanggal saja)
+        if (!empty($createdAt)) {
+            // createdAt = YYYY-MM-DD
+            $query->whereDate($this->model->getTable() . '.created_at', $createdAt);
+        }
+        if (!empty($updatedAt)) {
+            $query->whereDate($this->model->getTable() . '.updated_at', $updatedAt);
+        }
+
+        // Filter rentang tanggal (created_at)
+        if (!empty($startRange) && !empty($endRange)) {
+            // gunakan awal/akhir hari
+            $start = Carbon::parse($startRange, $tz)->startOfDay();
+            $end = Carbon::parse($endRange, $tz)->endOfDay();
+            $query->whereBetween($this->model->getTable() . '.created_at', [$start, $end]);
+        } else {
+            if (!empty($startRange)) {
+                $start = Carbon::parse($startRange, $tz)->startOfDay();
+                $query->where($this->model->getTable() . '.created_at', '>=', $start);
+            }
+            if (!empty($endRange)) {
+                $end = Carbon::parse($endRange, $tz)->endOfDay();
+                $query->where($this->model->getTable() . '.created_at', '<=', $end);
+            }
+        }
+
+        // (opsional) urutkan terbaru dulu agar file export “enak” dilihat
+        $query->latest($this->model->getTable() . '.created_at');
 
         $data = $query->get();
 
-        if ($data->isEmpty()) {
-            return [];
-        }
-
-        return $data;
+        return $data->isEmpty() ? [] : $data->values();
     }
 
     public function import($file): mixed
