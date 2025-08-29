@@ -65,35 +65,98 @@ class PermitRepository implements PermitRepositoryInterface
 
     public function paginate(int $page, int $limit, array $search, array $sortBy): mixed
     {
-        $query = $this->model->newQuery();
-        $query->with([
-            'user',
-            'permitType',
-            'approvals',
-            'userTimeworkSchedule',
-        ]);
-        // Penerapan search multi-field
+        $user = auth()->user();
+        $roles = collect([
+            // single role di kolom 'role'
+            data_get($user, 'role'),
+        ])
+            // multiple roles via relasi 'roles'
+            ->merge(data_get($user, 'roles.*.name', []))
+            ->filter()
+            ->map(fn($r) => strtolower((string) $r))
+            ->values();
+
+        $isAdmin = $roles->intersect(['Superadmin', 'Administrator'])->isNotEmpty();
+
+        $query = $this->model->newQuery()
+            ->with([
+                'user',
+                'permitType',
+                'approvals',
+                'userTimeworkSchedule',
+            ]);
+
+        // Filter data berdasar role
+        if (!$isAdmin) {
+            $userId = optional($user)->id;
+            $approverColumn = 'user_id'; // <-- ganti jika nama kolom approver berbeda
+
+            $query->where(function ($q) use ($userId, $approverColumn) {
+                $q->where('user_id', $userId)
+                    ->orWhereHas('approvals', function ($qa) use ($userId, $approverColumn) {
+                        $qa->where($approverColumn, $userId);
+                    });
+            });
+        }
+
+        // 🔎 Search multi-field (opsional: whitelist kolom agar aman dari salah input)
         if (!empty($search)) {
-            $query->where(function ($q) use ($search) {
+            // optional whitelist untuk keamanan
+            $searchable = [
+                'permit_numbers',
+                'status',
+                'notes',
+                'user_id',
+                'permit_type_id',
+                // tambahkan kolom lain yang memang ada di tabel
+            ];
+
+            $query->where(function ($q) use ($search, $searchable) {
                 foreach ($search as $field => $value) {
-                    if ($value) {
+                    if ($value === null || $value === '')
+                        continue;
+                    if (!in_array($field, $searchable, true))
+                        continue; // skip field tidak valid
+
+                    // kalau kolom numerik, bisa pakai where biasa.
+                    if (is_numeric($value)) {
+                        $q->orWhere($field, $value);
+                    } else {
                         $q->orWhere($field, 'like', '%' . $value . '%');
                     }
                 }
             });
         }
-        // Penerapan sorting
+
+        // Sorting (aman dengan fallback)
         if (!empty($sortBy)) {
+            // optional whitelist kolom sort
+            $sortable = [
+                'created_at',
+                'updated_at',
+                'start_date',
+                'end_date',
+                'permit_numbers',
+                'status',
+            ];
+
             foreach ($sortBy as $sort) {
-                $query->orderBy($sort['key'], $sort['order'] ?? 'asc');
+                $key = $sort['key'] ?? null;
+                $order = strtolower($sort['order'] ?? 'asc');
+                if (!$key || !in_array($key, $sortable, true))
+                    continue;
+                if (!in_array($order, ['asc', 'desc'], true))
+                    $order = 'asc';
+
+                $query->orderBy($key, $order);
             }
         } else {
-            // Default sorting jika tidak ada sortBy
-            $query->latest();
+            $query->latest(); // default: by created_at desc
         }
-        // Return hasil pagination
+
         return $query->paginate($limit, ['*'], 'page', $page);
     }
+
     public function paginateListType(int $typeId, int $page, int $limit): mixed
     {
         $query = $this->model->newQuery();
