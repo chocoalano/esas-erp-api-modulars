@@ -65,18 +65,16 @@ class PermitRepository implements PermitRepositoryInterface
 
     public function paginate(int $page, int $limit, array $search, array $sortBy): mixed
     {
+        // Ambil user yang sedang login
         $user = auth()->user();
-        $roles = collect([
-            // single role di kolom 'role'
-            data_get($user, 'role'),
-        ])
-            // multiple roles via relasi 'roles'
-            ->merge(data_get($user, 'roles.*.name', []))
-            ->filter()
-            ->map(fn($r) => strtolower((string) $r))
-            ->values();
 
-        $isAdmin = $roles->intersect(['Superadmin', 'Administrator'])->isNotEmpty();
+        // Pastikan user ada dan valid sebelum melanjutkan
+        if (!$user) {
+            return collect([]); // Kembalikan koleksi kosong jika user tidak login
+        }
+
+        // Tentukan apakah user memiliki peran Superadmin atau Administrator
+        $isAdmin = $user->hasAnyRole(['Superadmin', 'Administrator']);
 
         $query = $this->model->newQuery()
             ->with([
@@ -86,39 +84,54 @@ class PermitRepository implements PermitRepositoryInterface
                 'userTimeworkSchedule',
             ]);
 
-        // Filter data berdasar role
+        // Filter data berdasarkan role
         if (!$isAdmin) {
-            $userId = optional($user)->id;
-            $approverColumn = 'user_id'; // <-- ganti jika nama kolom approver berbeda
-
-            $query->where(function ($q) use ($userId, $approverColumn) {
-                $q->where('user_id', $userId)
-                    ->orWhereHas('approvals', function ($qa) use ($userId, $approverColumn) {
-                        $qa->where($approverColumn, $userId);
+            // Logika untuk user non-admin:
+            // 1. Tampilkan pengajuan yang dibuat oleh user sendiri (user_id)
+            // 2. Tampilkan pengajuan yang membutuhkan persetujuan dari user ini.
+            //    Asumsi: 'approvals' adalah relasi ke tabel yang berisi ID approver.
+            $query->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id) // Pengajuan pribadi
+                    ->orWhereHas('approvals', function ($subQuery) use ($user) {
+                        // Asumsi kolom approver adalah 'approver_user_id'.
+                        // Sesuaikan dengan nama kolom yang benar di tabel approvals Anda.
+                        $subQuery->where('user_id', $user->id);
                     });
             });
         }
 
-        // 🔎 Search multi-field (opsional: whitelist kolom agar aman dari salah input)
-        if (!empty($search)) {
-            // optional whitelist untuk keamanan
-            $searchable = [
-                'permit_numbers',
-                'status',
-                'notes',
-                'user_id',
-                'permit_type_id',
-                // tambahkan kolom lain yang memang ada di tabel
-            ];
+        // 🔎 Search multi-field
+        $this->applySearchFilters($query, $search);
 
+        // Sorting
+        $this->applySorting($query, $sortBy);
+
+        // Default sorting jika tidak ada
+        if (empty($sortBy)) {
+            $query->latest();
+        }
+
+        return $query->paginate($limit, ['*'], 'page', $page);
+    }
+
+    // Tambahkan helper method untuk search dan sort agar kode lebih rapi
+    protected function applySearchFilters($query, array $search): void
+    {
+        $searchable = [
+            'permit_numbers',
+            'status',
+            'notes',
+            'user_id',
+            'permit_type_id'
+        ];
+
+        if (!empty($search)) {
             $query->where(function ($q) use ($search, $searchable) {
                 foreach ($search as $field => $value) {
-                    if ($value === null || $value === '')
+                    if (!in_array($field, $searchable) || empty($value)) {
                         continue;
-                    if (!in_array($field, $searchable, true))
-                        continue; // skip field tidak valid
+                    }
 
-                    // kalau kolom numerik, bisa pakai where biasa.
                     if (is_numeric($value)) {
                         $q->orWhere($field, $value);
                     } else {
@@ -127,34 +140,31 @@ class PermitRepository implements PermitRepositoryInterface
                 }
             });
         }
+    }
 
-        // Sorting (aman dengan fallback)
+    protected function applySorting($query, array $sortBy): void
+    {
+        $sortable = [
+            'created_at',
+            'updated_at',
+            'start_date',
+            'end_date',
+            'permit_numbers',
+            'status'
+        ];
+
         if (!empty($sortBy)) {
-            // optional whitelist kolom sort
-            $sortable = [
-                'created_at',
-                'updated_at',
-                'start_date',
-                'end_date',
-                'permit_numbers',
-                'status',
-            ];
-
             foreach ($sortBy as $sort) {
                 $key = $sort['key'] ?? null;
                 $order = strtolower($sort['order'] ?? 'asc');
-                if (!$key || !in_array($key, $sortable, true))
+
+                if (!$key || !in_array($key, $sortable) || !in_array($order, ['asc', 'desc'])) {
                     continue;
-                if (!in_array($order, ['asc', 'desc'], true))
-                    $order = 'asc';
+                }
 
                 $query->orderBy($key, $order);
             }
-        } else {
-            $query->latest(); // default: by created_at desc
         }
-
-        return $query->paginate($limit, ['*'], 'page', $page);
     }
 
     public function paginateListType(int $typeId, int $page, int $limit): mixed
