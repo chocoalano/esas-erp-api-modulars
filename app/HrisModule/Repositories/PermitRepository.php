@@ -176,11 +176,11 @@ class PermitRepository implements PermitRepositoryInterface
             $query->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id)                     // pengajuan miliknya
                     ->orWhereHas('approvals', function ($aq) use ($user) {
-                        $aq->where('approver_id', $user->id)          // butuh approval dari user ini
+                        $aq->where('user_id', $user->id)          // butuh approval dari user ini
                             ->where(function ($s) {
                                 // sesuaikan nilai status "menunggu" di sistem kamu
-                                $s->whereNull('status')
-                                    ->orWhereIn('status', ['pending', 'waiting', 'requested']);
+                                $s->whereNull('user_approve')
+                                    ->orWhereIn('user_approve', ['w', 'y', 'n']);
                             });
                     });
             });
