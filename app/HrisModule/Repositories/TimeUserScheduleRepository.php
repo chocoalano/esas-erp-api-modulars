@@ -174,7 +174,7 @@ class TimeUserScheduleRepository implements TimeUserScheduleRepositoryInterface
         }
 
         if (!empty($scheduleEntries)) {
-            return InsertUpdateScheduleJob::dispatch($scheduleEntries);
+            InsertUpdateScheduleJob::dispatch($scheduleEntries);
         }
         return null;
     }

@@ -9,12 +9,19 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class InsertUpdateScheduleJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected $data;
+    /**
+     * Data yang akan diproses.
+     *
+     * @var array
+     */
+    protected array $data;
+
     /**
      * Create a new job instance.
      */
@@ -28,23 +35,42 @@ class InsertUpdateScheduleJob implements ShouldQueue
      */
     public function handle(): void
     {
-        ini_set('memory_limit', '1024M');
-        collect($this->data)->chunk(10)->each(function ($chunk) {
-            foreach ($chunk->toArray() as $k) {
-                UserTimeworkSchedule::updateOrCreate([
-                    "user_id" => $k['user_id'],
-                    "work_day" => $k['work_day'],
-                ], [
-                    "user_id" => $k['user_id'],
-                    "time_work_id" => $k['time_work_id'],
-                    "work_day" => $k['work_day'],
-                ]);
-            }
-        });
+        // Atur memory_limit khusus di job ini agar tidak cepat OOM
+        ini_set('memory_limit', '512M');
+
+        // Gunakan chunk agar tidak berat
+        collect($this->data)
+            ->chunk(300)
+            ->each(function ($chunk) {
+                foreach ($chunk as $k) {
+                    try {
+                        UserTimeworkSchedule::updateOrCreate(
+                            [
+                                'user_id'  => $k['user_id'],
+                                'work_day' => $k['work_day'],
+                            ],
+                            [
+                                'time_work_id' => $k['time_work_id'],
+                            ]
+                        );
+                    } catch (Throwable $e) {
+                        Log::error('InsertUpdateScheduleJob error', [
+                            'user_id'   => $k['user_id'] ?? null,
+                            'work_day'  => $k['work_day'] ?? null,
+                            'message'   => $e->getMessage(),
+                        ]);
+                    }
+                }
+            });
     }
-    public function failed(\Exception $exception)
+
+    /**
+     * Menangani job yang gagal permanen (setelah retry habis).
+     */
+    public function failed(Throwable $exception): void
     {
-        Log::error('Job failed', ['exception' => $exception->getMessage()]);
-        // Anda bisa melakukan tindakan lain jika terjadi kegagalan
+        Log::error('InsertUpdateScheduleJob failed', [
+            'exception' => $exception->getMessage(),
+        ]);
     }
 }
