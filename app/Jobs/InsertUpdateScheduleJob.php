@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\AdministrationApp\UserTimeworkSchedule;
+use App\HrisModule\Models\UserTimeworkSchedule;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -28,9 +28,10 @@ class InsertUpdateScheduleJob implements ShouldQueue
      */
     public function handle(): void
     {
+        ini_set('memory_limit', '1024M');
         collect($this->data)->chunk(10)->each(function ($chunk) {
             foreach ($chunk->toArray() as $k) {
-                \App\HrisModule\Models\UserTimeworkSchedule::updateOrCreate([
+                UserTimeworkSchedule::updateOrCreate([
                     "user_id" => $k['user_id'],
                     "work_day" => $k['work_day'],
                 ], [
