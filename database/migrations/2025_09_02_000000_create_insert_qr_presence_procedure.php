@@ -44,7 +44,7 @@ return new class extends Migration {
                 );
 
                 COMMIT;
-            END;
+            END
         ");
     }
 
