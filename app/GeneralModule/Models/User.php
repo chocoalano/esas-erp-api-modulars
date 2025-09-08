@@ -23,7 +23,8 @@ class User extends Authenticatable
 
 	protected $casts = [
 		'company_id' => 'int',
-		'email_verified_at' => 'datetime'
+		'email_verified_at' => 'datetime',
+        'is_attendance' => 'boolean'
 	];
 
 	protected $hidden = [
@@ -41,7 +42,8 @@ class User extends Authenticatable
 		'avatar',
 		'status',
 		'remember_token',
-		'device_id'
+		'device_id',
+		'is_attendance',
 	];
 
     public const STATUS = [

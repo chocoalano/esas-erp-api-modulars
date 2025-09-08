@@ -75,6 +75,7 @@ class UserAttendance extends Model
         'image_out',
         'status_in',
         'status_out',
+        'date_presence',
         'created_by',
         'updated_by'
     ];
