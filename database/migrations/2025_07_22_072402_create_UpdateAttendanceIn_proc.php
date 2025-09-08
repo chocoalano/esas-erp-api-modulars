@@ -3,123 +3,123 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
-{
-    /**
-     * Run the migrations.
-     */
+return new class extends Migration {
     public function up(): void
     {
-        DB::unprepared("CREATE PROCEDURE `UpdateAttendanceIn`(IN `p_user_id` INT, IN `p_time_id` INT, IN `p_lat` DECIMAL(10,8), IN `p_long` DECIMAL(11,8), IN `p_image` VARCHAR(255), IN `p_time` TIME)
-        BEGIN
-            DECLARE v_attendance_id INT DEFAULT NULL;
-            DECLARE v_schedule_id INT DEFAULT NULL;
-            DECLARE v_in_time TIME;
-            DECLARE v_status VARCHAR(10);
-            DECLARE exit_code INT DEFAULT 0;
-
-            -- Menangani error agar transaksi rollback jika terjadi kesalahan
-            DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+        DB::unprepared(<<<'SQL'
+            DROP PROCEDURE IF EXISTS `UpdateAttendanceIn`;
+            CREATE PROCEDURE `UpdateAttendanceIn`(
+                IN `p_user_id` INT,
+                IN `p_time_id` INT,
+                IN `p_lat` DECIMAL(10,8),
+                IN `p_long` DECIMAL(11,8),
+                IN `p_image` VARCHAR(255),
+                IN `p_time` TIME
+            )
             BEGIN
-                ROLLBACK;
-                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Terjadi kesalahan dalam transaksi';
-            END;
+                DECLARE v_attendance_id INT DEFAULT NULL;
+                DECLARE v_schedule_id   INT DEFAULT NULL;
+                DECLARE v_in_time       TIME;
+                DECLARE v_status        VARCHAR(10);
+                DECLARE v_now           DATETIME;
+                DECLARE v_today         DATE;
+                DECLARE v_old_tz        VARCHAR(64) DEFAULT @@session.time_zone;
+                DECLARE exit_code       INT DEFAULT 0;
 
-            -- Start a transaction
-            START TRANSACTION;
+                -- Handler error
+                DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+                BEGIN
+                    ROLLBACK;
+                    SET time_zone = v_old_tz;
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Terjadi kesalahan dalam transaksi';
+                END;
 
-            -- Cek apakah semua parameter yang dibutuhkan ada
-            IF p_user_id IS NULL OR p_time_id IS NULL OR p_lat IS NULL
+                -- Lock timezone ke Asia/Jakarta
+                SET time_zone = 'Asia/Jakarta';
+                SET v_now   = NOW();          -- WIB
+                SET v_today = CURRENT_DATE(); -- WIB
+
+                START TRANSACTION;
+
+                -- Validasi parameter
+                IF p_user_id IS NULL OR p_time_id IS NULL OR p_lat IS NULL
                 OR p_long IS NULL OR p_image IS NULL OR p_time IS NULL THEN
-                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Required fields are missing';
-            END IF;
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Required fields are missing';
+                END IF;
 
-            -- Mendapatkan attendance berdasarkan user dan tanggal sekarang
-            SELECT id INTO v_attendance_id
-            FROM user_attendances
-            WHERE user_id = p_user_id
-            AND DATE(created_at) = CURDATE()
-            LIMIT 1;
+                -- Cari attendance hari ini
+                SELECT id INTO v_attendance_id
+                FROM user_attendances
+                WHERE user_id = p_user_id
+                AND created_at >= v_today
+                AND created_at <  v_today + INTERVAL 1 DAY
+                LIMIT 1;
 
-            -- Dapatkan jadwal kerja sesuai waktu dan hari
-            SELECT id INTO v_schedule_id
-            FROM user_timework_schedules
-            WHERE user_id = p_user_id
-            AND work_day = CURDATE()
-            AND time_work_id = p_time_id
-            LIMIT 1;
+                -- Cari jadwal kerja hari ini
+                SELECT id INTO v_schedule_id
+                FROM user_timework_schedules
+                WHERE user_id = p_user_id
+                AND work_day = v_today
+                AND time_work_id = p_time_id
+                LIMIT 1;
 
-            -- Dapatkan waktu masuk dari time_work
-            SELECT `in` INTO v_in_time
-            FROM time_workes
-            WHERE id = p_time_id
-            LIMIT 1;
+                -- Ambil jam masuk dari master time_work
+                SELECT `in` INTO v_in_time
+                FROM time_workes
+                WHERE id = p_time_id
+                LIMIT 1;
 
-            -- Jika waktu masuk tidak ditemukan, beri pesan error
-            IF v_in_time IS NULL THEN
-                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid time_id: Time In not found';
-            END IF;
+                IF v_in_time IS NULL THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid time_id: Time In not found';
+                END IF;
 
-            -- Cek status (late atau normal)
-            SET v_status = IF(p_time > v_in_time, 'late', 'normal');
+                -- Tentukan status (late / normal)
+                SET v_status = IF(p_time > v_in_time, 'late', 'normal');
 
-            -- Jika attendance tidak ditemukan, buat baru
-            IF v_attendance_id IS NULL THEN
-                INSERT INTO user_attendances (
-                    user_id,
-                    user_timework_schedule_id,
-                    time_in,
-                    lat_in,
-                    long_in,
-                    image_in,
-                    status_in,
-                    type_in,
-                    created_by,
-                    created_at
-                ) VALUES (
-                    p_user_id,
-                    v_schedule_id,
-                    p_time,
-                    p_lat,
-                    p_long,
-                    p_image,
-                    v_status,
-                    'face-device',
-                    'p_user_id',
-                    CURRENT_TIMESTAMP()
-                );
-                UPDATE users SET is_attendance = 1 WHERE id=p_user_id;
-            ELSE
-                -- Perbarui data attendance yang ada
-                -- UPDATE user_attendances
-                -- SET
-                --     user_timework_schedule_id = v_schedule_id,
-                --     time_in = p_time,
-                --     lat_in = p_lat,
-                --     long_in = p_long,
-                --     image_in = p_image,
-                --     status_in = v_status,
-                --     type_in = 'face-device',
-                --     updated_by = p_user_id,
-                --     updated_at = CURRENT_TIMESTAMP()
-                -- WHERE id = v_attendance_id;
-                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Attendance is current added before';
-            END IF;
+                -- Jika belum ada attendance hari ini → insert baru
+                IF v_attendance_id IS NULL THEN
+                    INSERT INTO user_attendances (
+                        user_id,
+                        user_timework_schedule_id,
+                        time_in,
+                        lat_in,
+                        long_in,
+                        image_in,
+                        status_in,
+                        type_in,
+                        created_by,
+                        created_at
+                    ) VALUES (
+                        p_user_id,
+                        v_schedule_id,
+                        p_time,
+                        p_lat,
+                        p_long,
+                        p_image,
+                        v_status,
+                        'face-device',
+                        p_user_id,
+                        v_now
+                    );
 
-            -- Commit the transaction jika tidak ada error
-            COMMIT;
+                    UPDATE users SET is_attendance = 1 WHERE id = p_user_id;
+                ELSE
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Attendance already exists for today';
+                END IF;
 
-            -- Set exit code to true (sukses)
-            SET exit_code = 1;
-            SELECT exit_code AS success;
-        END");
+                COMMIT;
+
+                -- Kembalikan timezone lama
+                SET time_zone = v_old_tz;
+
+                SET exit_code = 1;
+                SELECT exit_code AS success;
+            END;
+        SQL);
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        DB::unprepared("DROP PROCEDURE IF EXISTS UpdateAttendanceIn");
+        DB::unprepared("DROP PROCEDURE IF EXISTS `UpdateAttendanceIn`");
     }
 };

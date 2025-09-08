@@ -180,7 +180,7 @@ class PermitRepository implements PermitRepositoryInterface
                             ->where(function ($s) {
                                 // sesuaikan nilai status "menunggu" di sistem kamu
                                 $s->whereNull('user_approve')
-                                    ->orWhereIn('user_approve', ['w', 'y', 'n']);
+                                    ->orWhereIn('user_approve', ['w']);
                             });
                     });
             });
