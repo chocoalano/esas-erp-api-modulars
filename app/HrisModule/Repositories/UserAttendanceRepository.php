@@ -59,7 +59,7 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
                 $query->where('status_out', $search['status_out']);
             }
             if (!empty($search['createdAt'])) {
-                $query->whereDate('created_at', $search['createdAt']);
+                $query->whereDate('date_presence', $search['createdAt']);
             }
             if (!empty($search['start']) && !empty($search['end'])) {
                 $query->whereBetween('date_presence', [$search['start'], $search['end']]);

@@ -359,6 +359,29 @@ class PermitRepository implements PermitRepositoryInterface
 
         return $model;
     }
+    // public function approval_process(?int $id, ?int $userId, array $data): mixed
+    // {
+    //     $model = $this->model
+    //         ->with('approvals')
+    //         ->where('id', $id)
+    //         ->whereHas('approvals', function ($app) use ($userId) {
+    //             $app->where('user_id', $userId);
+    //         })
+    //         ->first();
+
+    //     if (!$model) {
+    //         return null;
+    //     }
+    //     $approval = $model->approvals->firstWhere('user_id', $userId);
+
+    //     if ($approval) {
+    //         $approval->update($data);
+    //     }
+
+
+
+    //     return $model;
+    // }
     public function approval_process(?int $id, ?int $userId, array $data): mixed
     {
         $model = $this->model
@@ -372,14 +395,44 @@ class PermitRepository implements PermitRepositoryInterface
         if (!$model) {
             return null;
         }
-        $approval = $model->approvals->firstWhere('user_id', $userId);
 
+        // update approval user ini
+        $approval = $model->approvals->firstWhere('user_id', $userId);
         if ($approval) {
             $approval->update($data);
         }
 
+        // refresh relasi approvals
+        $model->load('approvals');
+
+        // cek apakah semua approval sudah "y"
+        $allApproved = $model->approvals->every(function ($app) {
+            return strtolower($app->status) === 'y';
+        });
+
+        if ($allApproved) {
+            // jika permit_type_id = 15, update absensi sesuai pengajuan
+            if ((int) $model->permit_type_id === 15) {
+                // asumsinya model ada field user_id, date, time_in, time_out
+                // sesuaikan nama kolom dengan tabel absensi yang kamu pakai
+                DB::table('user_attendances')
+                    ->where('user_id', $model->user_id)
+                    ->whereDate('date_presence', $model->userTimeworkSchedule->work_day) // pastikan field date ada
+                    ->update([
+                        'time_in' => $model->timein_adjust,   // ambil dari pengajuan
+                        'time_out' => $model->timeout_adjust,  // ambil dari pengajuan
+                        'updated_at' => now(),
+                    ]);
+
+            }
+
+            // bisa juga update status permit jadi approved
+            $model->update(['status' => 'approved']);
+        }
+
         return $model;
     }
+
 
     public function update(int|string $id, array $data): mixed
     {
