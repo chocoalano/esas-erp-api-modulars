@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\HrisModule\Models\UserTimeworkSchedule;
+use DB;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -44,20 +45,19 @@ class InsertUpdateScheduleJob implements ShouldQueue
             ->each(function ($chunk) {
                 foreach ($chunk as $k) {
                     try {
-                        UserTimeworkSchedule::updateOrCreate(
+                        DB::statement(
+                            'CALL UpsertUserTimeworkSchedule(?, ?, ?)',
                             [
-                                'user_id'  => $k['user_id'],
-                                'work_day' => $k['work_day'],
-                            ],
-                            [
-                                'time_work_id' => $k['time_work_id'],
+                                $k['user_id'],
+                                $k['work_day'],
+                                $k['time_work_id'],
                             ]
                         );
                     } catch (Throwable $e) {
                         Log::error('InsertUpdateScheduleJob error', [
-                            'user_id'   => $k['user_id'] ?? null,
-                            'work_day'  => $k['work_day'] ?? null,
-                            'message'   => $e->getMessage(),
+                            'user_id' => $k['user_id'] ?? null,
+                            'work_day' => $k['work_day'] ?? null,
+                            'message' => $e->getMessage(),
                         ]);
                     }
                 }

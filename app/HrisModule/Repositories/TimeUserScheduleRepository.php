@@ -223,9 +223,7 @@ class TimeUserScheduleRepository implements TimeUserScheduleRepositoryInterface
                 $entries[] = [
                     'user_id' => $uid,
                     'time_work_id' => $assignedTimeWorkId,
-                    'work_day' => $day->toDateString(), // Y-m-d
-                    'created_at' => $nowTs,
-                    'updated_at' => $nowTs,
+                    'work_day' => $day->toDateString(),
                 ];
             }
 
@@ -233,8 +231,8 @@ class TimeUserScheduleRepository implements TimeUserScheduleRepositoryInterface
         }
 
         if (!empty($entries)) {
-            // dd($entries);
-            return InsertUpdateScheduleJob::dispatch($entries);
+            dd($entries);
+            // return InsertUpdateScheduleJob::dispatch($entries);
         }
 
         return null; // Semua hari dalam rentang adalah libur
