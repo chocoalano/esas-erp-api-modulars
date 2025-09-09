@@ -122,10 +122,8 @@ class TimeUserScheduleRepository implements TimeUserScheduleRepositoryInterface
      * Membuat entri jadwal kerja untuk banyak pengguna dalam rentang tanggal.
      *
      * @param array $data Data untuk membuat jadwal.
-     * @return PendingDispatch|null Mengembalikan instance PendingDispatch jika job didispatch, null jika tidak.
-     * @throws InvalidArgumentException Jika data yang diperlukan hilang atau tidak valid.
      */
-    public function create(array $data): ?PendingDispatch
+    public function create(array $data): ?bool
     {
         // --- Validasi Input Dasar ---
         $requiredKeys = ['work_day_start', 'work_day_finish', 'user_id', 'time_work_id', 'is_rolling'];
@@ -231,11 +229,11 @@ class TimeUserScheduleRepository implements TimeUserScheduleRepositoryInterface
         }
 
         if (!empty($entries)) {
-            // dd($entries);
-            return InsertUpdateScheduleJob::dispatch($entries);
+            InsertUpdateScheduleJob::dispatch($entries); // atau ->afterCommit()
+            return true; // atau response()->json(['queued' => true]);
         }
+        return false;
 
-        return null; // Semua hari dalam rentang adalah libur
     }
 
     /**
