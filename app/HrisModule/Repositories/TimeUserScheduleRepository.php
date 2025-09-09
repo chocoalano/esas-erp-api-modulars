@@ -231,8 +231,8 @@ class TimeUserScheduleRepository implements TimeUserScheduleRepositoryInterface
         }
 
         if (!empty($entries)) {
-            dd($entries);
-            // return InsertUpdateScheduleJob::dispatch($entries);
+            // dd($entries);
+            return InsertUpdateScheduleJob::dispatch($entries);
         }
 
         return null; // Semua hari dalam rentang adalah libur
