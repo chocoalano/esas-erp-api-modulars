@@ -10,6 +10,7 @@ use App\HrisModule\Models\UserTimeworkSchedule;
 use App\HrisModule\Repositories\Contracts\TimeUserScheduleRepositoryInterface;
 use App\Jobs\InsertUpdateScheduleJob;
 use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder; // Import Builder untuk type-hinting query
 use Illuminate\Pagination\LengthAwarePaginator; // Untuk return type paginate
 use Illuminate\Database\Eloquent\Collection; // Untuk return type export
@@ -126,57 +127,117 @@ class TimeUserScheduleRepository implements TimeUserScheduleRepositoryInterface
      */
     public function create(array $data): ?PendingDispatch
     {
-        // Validasi Input Dasar
-        $requiredKeys = ['work_day_start', 'work_day_finish', 'user_id', 'time_work_id'];
+        // --- Validasi Input Dasar ---
+        $requiredKeys = ['work_day_start', 'work_day_finish', 'user_id', 'time_work_id', 'is_rolling'];
         foreach ($requiredKeys as $key) {
-            if (!isset($data[$key])) {
+            if (!array_key_exists($key, $data)) {
                 throw new InvalidArgumentException("Missing required data: '{$key}' is not provided.");
             }
         }
-
         if (!is_array($data['user_id']) || empty($data['user_id'])) {
             throw new InvalidArgumentException("'user_id' must be a non-empty array of user IDs.");
         }
 
-        // Parsing dan Validasi Tanggal
-        try {
-            $workDayStart = Carbon::parse($data['work_day_start'])->timezone(config('app.timezone'));
-            $workDayFinish = Carbon::parse($data['work_day_finish'])->timezone(config('app.timezone'));
-        } catch (\Exception $e) {
-            throw new InvalidArgumentException(
-                "Invalid date format for 'work_day_start' or 'work_day_finish'. Details: " . $e->getMessage()
-            );
+        $isRolling = filter_var($data['is_rolling'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+        if ($isRolling) {
+            if (!isset($data['time_work_rolling_id'])) {
+                throw new InvalidArgumentException("'time_work_rolling_id' is required when 'is_rolling' is true.");
+            }
+            if ((int) $data['time_work_rolling_id'] === (int) $data['time_work_id']) {
+                throw new InvalidArgumentException("'time_work_rolling_id' must be different from 'time_work_id' when rolling.");
+            }
         }
 
-        if ($workDayStart->greaterThan($workDayFinish)) {
+        // --- Parsing & Normalisasi Tanggal (ke timezone app) ---
+        try {
+            $tz = config('app.timezone', 'Asia/Jakarta');
+            $start = CarbonImmutable::parse($data['work_day_start'])->timezone($tz)->startOfDay();
+            $finish = CarbonImmutable::parse($data['work_day_finish'])->timezone($tz)->startOfDay();
+        } catch (\Throwable $e) {
+            throw new InvalidArgumentException(
+                "Invalid date for 'work_day_start' or 'work_day_finish'. Details: " . $e->getMessage()
+            );
+        }
+        if ($start->greaterThan($finish)) {
             throw new InvalidArgumentException('Start date cannot be greater than finish date.');
         }
 
-        $scheduleEntries = [];
+        // --- Normalisasi dayoff (case-insensitive -> TitleCase) ---
         $skipDays = $data['dayoff'] ?? [];
-
-        $currentDay = $workDayStart->clone();
-        while ($currentDay->lte($workDayFinish)) {
-            $dayName = $currentDay->format('l');
-
-            if (!in_array($dayName, $skipDays)) {
-                foreach ($data['user_id'] as $userId) {
-                    $scheduleEntries[] = [
-                        'user_id' => $userId,
-                        'time_work_id' => $data['time_work_id'],
-                        'work_day' => $currentDay->toDateString(),
-                        'created_at' => Carbon::now(), // Tambahkan timestamp
-                        'updated_at' => Carbon::now(), // Tambahkan timestamp
-                    ];
-                }
+        if (!is_array($skipDays)) {
+            throw new InvalidArgumentException("'dayoff' must be an array of day names (e.g., ['Sunday','Saturday']).");
+        }
+        $skipDays = array_map(function ($v) {
+            if (!is_string($v))
+                return $v;
+            $v = strtolower(trim($v));
+            return ucfirst($v);
+        }, $skipDays);
+        $validDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        foreach ($skipDays as $d) {
+            if (!in_array($d, $validDays, true)) {
+                throw new InvalidArgumentException("Invalid dayoff value '{$d}'. Allowed: " . implode(',', $validDays));
             }
-            $currentDay->addDay();
         }
 
-        if (!empty($scheduleEntries)) {
-            InsertUpdateScheduleJob::dispatch($scheduleEntries);
+        // --- Siapkan data dasar ---
+        $primaryTwId = (int) $data['time_work_id'];
+        $rollingTwId = $isRolling ? (int) $data['time_work_rolling_id'] : null;
+        $userIds = array_values(array_unique(array_map('intval', $data['user_id'])));
+        $nowTs = Carbon::now();
+        $entries = [];
+
+        /**
+         * Mekanisme Rolling Mingguan dengan indikator "switch di hari libur":
+         * - Kita pakai weekIndex (0,1,2,...) untuk menentukan shift minggu berjalan.
+         * - weekIndex bertambah **sekali** tiap memasuki blok hari libur (awal rangkaian libur).
+         * - Hari libur tidak dibuat entry, dan tidak mengubah shift selain sebagai indikator pergantian minggu.
+         * - Hari kerja pertama pada rentang memakai weekIndex=0 (primary).
+         */
+        $weekIndex = 0;
+        $prevIsDayoff = null; // null di awal, lalu boolean
+
+        for ($day = $start; $day->lte($finish); $day = $day->addDay()) {
+            $dayName = $day->format('l');
+            $isDayoff = in_array($dayName, $skipDays, true);
+
+            // Jika memasuki blok dayoff (awal rangkaian libur) -> switch minggu (naikkan weekIndex).
+            if ($isDayoff) {
+                if ($prevIsDayoff === false || $prevIsDayoff === null) {
+                    // Hanya naik sekali di awal blok libur
+                    $weekIndex++;
+                }
+                $prevIsDayoff = true;
+                continue; // Tidak membuat jadwal pada hari libur
+            }
+
+            // Hari kerja: tentukan shift berdasarkan paritas weekIndex
+            $assignedTimeWorkId = $primaryTwId;
+            if ($isRolling) {
+                // weekIndex genap -> primary, ganjil -> rolling
+                // (Jika ingin kebalikannya, tukar operator ternary.)
+                $assignedTimeWorkId = ($weekIndex % 2 === 0) ? $primaryTwId : $rollingTwId;
+            }
+
+            foreach ($userIds as $uid) {
+                $entries[] = [
+                    'user_id' => $uid,
+                    'time_work_id' => $assignedTimeWorkId,
+                    'work_day' => $day->toDateString(), // Y-m-d
+                    'created_at' => $nowTs,
+                    'updated_at' => $nowTs,
+                ];
+            }
+
+            $prevIsDayoff = false;
         }
-        return null;
+
+        if (!empty($entries)) {
+            // dd($entries);
+            return InsertUpdateScheduleJob::dispatch($entries);
+        }
+
+        return null; // Semua hari dalam rentang adalah libur
     }
 
     /**
