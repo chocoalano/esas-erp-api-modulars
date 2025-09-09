@@ -51,12 +51,12 @@ class UserAttendance extends Model
 
     public function getTimeInAttribute($value)
     {
-        return Carbon::parse($value)->format('H:i:s');
+        return $value ? Carbon::parse($value)->format('H:i:s') : null;
     }
 
     public function getTimeOutAttribute($value)
     {
-        return Carbon::parse($value)->format('H:i:s');
+        return $value ? Carbon::parse($value)->format('H:i:s') : null;
     }
 
 
