@@ -8,6 +8,7 @@ namespace App\GeneralModule\Models;
 
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Spatie\Permission\Models\Role as Roles;
 use Spatie\Permission\Models\Permission;
 
@@ -33,13 +34,23 @@ class Role extends Roles
             'permission_id'     // foreign key pada pivot untuk Permission
         );
     }
-    public function users(): BelongsToMany
+    // public function users(): BelongsToMany
+    // {
+    //     return $this->belongsToMany(
+    //         User::class,
+    //         'model_has_roles',       // pivot table yang benar
+    //         'role_id',     // foreign key pada pivot untuk Role
+    //         'model_id'     // foreign key pada pivot untuk Permission
+    //     );
+    // }
+    public function users(): MorphToMany
     {
-        return $this->belongsToMany(
-            User::class,
-            'model_has_roles',       // pivot table yang benar
-            'role_id',     // foreign key pada pivot untuk Role
-            'model_id'     // foreign key pada pivot untuk Permission
+        return $this->morphedByMany(
+            User::class,          // target model yang benar
+            'model',              // morph name (harus 'model' agar match tabel Spatie)
+            'model_has_roles',    // pivot table bawaan Spatie
+            'role_id',            // FK ke role di pivot
+            'model_id'            // FK ke user di pivot
         );
     }
 
