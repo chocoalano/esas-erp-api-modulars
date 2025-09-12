@@ -13,6 +13,7 @@ use App\HrisModule\Models\UserTimeworkSchedule;
 use App\HrisModule\Repositories\Contracts\UserAttendanceRepositoryInterface;
 use Carbon\CarbonPeriod;
 use Exception;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -157,102 +158,17 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
         ]);
     }
 
-    public function attendance_inout_qrcode(string $type_presence, int $id_token): mixed
+    public function attendance_inout_qrcode(string $typePresence, int $idToken): Collection
     {
         $userId = Auth::id();
-        $currentTime = now(config('app.timezone'));
-        $currentDate = today(config('app.timezone'));
 
-        $qrPresence = DB::table('qr_presences as qrp')
-            ->join('departements as d', 'qrp.departement_id', '=', 'd.id')
-            ->join('time_workes as tw', 'qrp.timework_id', '=', 'tw.id')
-            ->select([
-                'qrp.id',
-                'qrp.type',
-                'qrp.token',
-                'qrp.expires_at',
-                'qrp.departement_id',
-                'qrp.timework_id',
-                'd.name as departement_name',
-                'tw.in as work_start_time',
-                'tw.company_id'
-            ])
-            ->where([
-                ['qrp.type', '=', $type_presence],
-                ['qrp.id', '=', $id_token]
-            ])
-            ->first();
+        $results = DB::select("CALL QrAttendance(?, ?, ?)", [
+            $userId,
+            $typePresence,
+            $idToken
+        ]);
 
-        if (!$qrPresence)
-            throw new Exception('Token tidak ditemukan!');
-
-        if (DB::table('qr_presence_transactions')->where('qr_presence_id', $qrPresence->id)->exists())
-            throw new Exception('Kode QR sudah digunakan!');
-
-        if ($currentTime->gt(Carbon::parse($qrPresence->expires_at)->setTimezone(config("app.timezone"))))
-            throw new Exception('Kode QR sudah kadaluarsa!');
-
-        $isUserInDepartment = DB::table('users')
-            ->where('id', $userId)
-            ->whereExists(fn($query) => $query->select(DB::raw(1))
-                ->from('user_employes')
-                ->whereColumn('user_employes.user_id', 'users.id')
-                ->where('user_employes.departement_id', $qrPresence->departement_id))
-            ->exists();
-
-        if (!$isUserInDepartment)
-            throw new Exception('User tidak terdaftar di departemen ini.');
-
-        $scheduleId = DB::table('user_timework_schedules')
-            ->where('user_id', $userId)
-            ->where('work_day', $currentDate)
-            ->value('id');
-
-        // Validasi absen pulang harus setelah absen masuk
-        if (
-            $type_presence === 'out' && !DB::table('user_attendances')
-                ->where('user_id', $userId)
-                ->whereDate('created_at', $currentDate)
-                ->whereNotNull('time_in')
-                ->exists()
-        ) {
-            throw new Exception('Anda harus melakukan absensi masuk sebelum absensi pulang!');
-        }
-
-        $status = $currentTime->lt($qrPresence->work_start_time) ? 'normal' : 'late';
-        $statusInOut = $type_presence === 'in' ? $status : ($currentTime->lt($qrPresence->work_start_time) ? 'unlate' : 'normal');
-
-        $company = DB::table('companies')->where('id', $qrPresence->company_id)->select('latitude', 'longitude')->first();
-
-        return DB::transaction(function () use ($userId, $currentTime, $currentDate, $type_presence, $qrPresence, $scheduleId, $statusInOut, $company) {
-            $attendance = UserAttendance::where('user_id', $userId)->whereDate('created_at', $currentDate)->first();
-
-            if ($attendance) {
-                // Cegah update absen masuk jika sudah ada
-                if ($type_presence === 'in' && !is_null($attendance->time_in)) {
-                    throw new Exception('Anda sudah melakukan absensi masuk hari ini.');
-                }
-
-                // Cegah update absen pulang jika sudah ada
-                // if ($type_presence === 'out' && !is_null($attendance->time_out)) {
-                //     throw new Exception('Anda sudah melakukan absensi pulang hari ini.');
-                // }
-
-                // Update jika absen sesuai dengan status yang belum terisi
-                $attendance->update($this->buildAttendanceData($attendance, $type_presence, $currentTime, $company, $statusInOut, $userId));
-            } else {
-                // Buat data baru jika belum ada absen hari ini
-                UserAttendance::create($this->buildAttendanceData(null, $type_presence, $currentTime, $company, $statusInOut, $userId, $scheduleId));
-            }
-
-            QrPresenceTransaction::create([
-                'qr_presence_id' => $qrPresence->id,
-                'user_attendance_id' => $attendance->id ?? DB::getPdo()->lastInsertId(),
-                'token' => $qrPresence->token,
-                'created_at' => $currentTime,
-                'updated_at' => $currentTime,
-            ]);
-        });
+        return collect($results);
     }
 
     private function buildAttendanceData($attendance, $type_presence, $currentTime, $company, $statusInOut, $userId, $scheduleId = null)
