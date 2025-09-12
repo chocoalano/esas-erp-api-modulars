@@ -34,15 +34,6 @@ class Role extends Roles
             'permission_id'     // foreign key pada pivot untuk Permission
         );
     }
-    // public function users(): BelongsToMany
-    // {
-    //     return $this->belongsToMany(
-    //         User::class,
-    //         'model_has_roles',       // pivot table yang benar
-    //         'role_id',     // foreign key pada pivot untuk Role
-    //         'model_id'     // foreign key pada pivot untuk Permission
-    //     );
-    // }
     public function users(): MorphToMany
     {
         return $this->morphedByMany(

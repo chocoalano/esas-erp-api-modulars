@@ -7,13 +7,12 @@ use App\GeneralModule\Models\Company;
 use App\GeneralModule\Models\User;
 use App\HrisModule\Models\Departement;
 use App\HrisModule\Models\QrPresence;
-use App\HrisModule\Models\QrPresenceTransaction;
 use App\HrisModule\Models\UserAttendance;
 use App\HrisModule\Models\UserTimeworkSchedule;
 use App\HrisModule\Repositories\Contracts\UserAttendanceRepositoryInterface;
 use Carbon\CarbonPeriod;
 use Exception;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -168,7 +167,7 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
             $idToken
         ]);
 
-        return collect($results);
+        return collect($results[0]);
     }
 
     private function buildAttendanceData($attendance, $type_presence, $currentTime, $company, $statusInOut, $userId, $scheduleId = null)
