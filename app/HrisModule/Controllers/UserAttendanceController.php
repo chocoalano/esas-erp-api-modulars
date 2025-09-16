@@ -278,13 +278,13 @@ class UserAttendanceController extends BaseController
             'end' => 'required|date|after_or_equal:start',
         ]);
         $data = $this->service->report(
-            $company_id ?? null,
-            $departement_id ?? null,
-            $user_id ?? null,
-            $status_in ?? null,
-            $status_out ?? null,
-            $start ?? null,
-            $end ?? null,
+            $validated['company_id'] ?? null,
+            $validated['departement_id'] ?? null,
+            $validated['user_id'] ?? null,
+            $validated['status_in'] ?? null,
+            $validated['status_out'] ?? null,
+            $validated['start'] ?? null,
+            $validated['end'] ?? null,
         );
         return $data;
     }

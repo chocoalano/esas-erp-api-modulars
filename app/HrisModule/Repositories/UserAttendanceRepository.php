@@ -405,11 +405,11 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
     ): mixed {
         // Validasi dan parsing tanggal awal & akhir
         $startDate = filled($start) && strtotime($start)
-            ? Carbon::parse($start)->startOfDay()
+            ? Carbon::parse($start)
             : Carbon::now()->startOfMonth()->startOfDay();
 
         $endDate = filled($end) && strtotime($end)
-            ? Carbon::parse($end)->endOfDay()
+            ? Carbon::parse($end)
             : Carbon::now()->endOfMonth()->endOfDay();
 
         // Buat koleksi tanggal-tanggal
