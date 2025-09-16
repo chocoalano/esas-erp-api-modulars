@@ -431,7 +431,7 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
                 $formatted = $date->format('Y-m-d');
                 return DB::raw("
         MAX(CASE
-            WHEN DATE(ua.created_at) = '{$formatted}'
+            WHEN DATE(ua.date_presence) = '{$formatted}'
             THEN CONCAT(COALESCE(ua.time_in, '-'), ' - ', COALESCE(ua.time_out, '-'))
             ELSE NULL
         END) AS `{$formatted}`");
@@ -475,9 +475,9 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
             // Perbaikan utama di bagian ini 👇
             ->leftJoin('user_attendances AS ua', function ($join) use ($startDate, $endDate) {
                 $join->on('ua.user_id', '=', 'u.id')
-                    ->where('ua.created_at', '>=', $startDate)
-                    ->where('ua.created_at', '<=', $endDate)
-                    ->whereNotNull('ua.created_at'); // ← Mencegah error DATE(null)
+                    ->where('ua.date_presence', '>=', $startDate)
+                    ->where('ua.date_presence', '<=', $endDate)
+                    ->whereNotNull('ua.date_presence'); // ← Mencegah error DATE(null)
             })
 
             // Join tambahan

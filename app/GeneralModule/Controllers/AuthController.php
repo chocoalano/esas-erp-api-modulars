@@ -20,6 +20,7 @@ class AuthController extends BaseController
     }
     public function store(AuthRequest $request)
     {
+        // dd($request->validated());
         return response()->json($this->service->login($request->validated()));
     }
     public function profile()
