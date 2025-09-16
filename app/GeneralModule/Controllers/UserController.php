@@ -89,10 +89,10 @@ class UserController extends BaseController
         ]);
         return response()->json([
             'form' => $this->service->form(
-                $input['company_id'],
-                $input['dept_id'],
-                $input['post_id'],
-                $input['lvl_id']
+                $input['company_id'] ?? null,
+                $input['dept_id'] ?? null,
+                $input['post_id'] ?? null,
+                $input['lvl_id'] ?? null
             )
         ]);
     }

@@ -108,46 +108,88 @@ class UserRepository implements UserRepositoryInterface
 
     public function form(int|string|null $company_id, int|string|null $dept_id, int|string|null $post_id, int|string|null $lvl_id): mixed
     {
-        // Ambil semua roles
-        $roles = Role::all();
+        // 1) Normalisasi semua parameter ke INT|null
+        $companyId = $this->toNullableId($company_id);
+        $deptId    = $this->toNullableId($dept_id);
+        $postId    = $this->toNullableId($post_id);
+        $lvlId     = $this->toNullableId($lvl_id);
 
-        // Ambil semua companies
-        $companies = Company::all();
+        // 2) Ambil master data (tanpa filter)
+        $roles      = Role::all();
+        $companies  = Company::all();
 
-        // Filter departement
+        // 3) Filter departement
         $departements = Departement::query()
-            ->when($company_id, fn($query) => $query->where('company_id', $company_id))
+            ->when(!is_null($companyId), fn($q) => $q->where('company_id', $companyId))
             ->get();
 
-        // Filter job positions
+        // 4) Filter job positions
         $jobPositions = JobPosition::query()
-            ->when($company_id, fn($query) => $query->where('company_id', $company_id))
-            ->when($dept_id, fn($query) => $query->where('departement_id', $dept_id))
+            ->when(!is_null($companyId), fn($q) => $q->where('company_id', $companyId))
+            ->when(!is_null($deptId),    fn($q) => $q->where('departement_id', $deptId))
             ->get();
 
-        // Filter job levels
+        // 5) Filter job levels
         $jobLevels = JobLevel::query()
-            ->when($company_id, fn($query) => $query->where('company_id', $company_id))
-            ->when($dept_id, fn($query) => $query->where('departement_id', $dept_id))
+            ->when(!is_null($companyId), fn($q) => $q->where('company_id', $companyId))
+            ->when(!is_null($deptId),    fn($q) => $q->where('departement_id', $deptId))
             ->get();
 
-        // Filter users
+        // 6) Filter users (gabung semua kondisi employee di satu whereHas agar tidak dobel join)
         $users = User::query()
-            ->when($company_id, fn($query) => $query->where('company_id', $company_id))
-            ->when($dept_id, fn($query) => $query->whereHas('employee', fn($emp) => $emp->where('departement_id', $dept_id)))
-            ->when($post_id, fn($query) => $query->whereHas('employee', fn($emp) => $emp->where('job_position_id', $post_id)))
-            ->when($lvl_id, fn($query) => $query->whereHas('employee', fn($emp) => $emp->where('job_level_id', $lvl_id)))
+            ->when(!is_null($companyId), fn($q) => $q->where('company_id', $companyId))
+            // ->when(!is_null($deptId) || !is_null($postId) || !is_null($lvlId), function ($q) use ($deptId, $postId, $lvlId) {
+            //     $q->whereHas('employee', function ($emp) use ($deptId, $postId, $lvlId) {
+            //         if (!is_null($deptId))  { $emp->where('departement_id', $deptId); }
+            //         if (!is_null($postId))  { $emp->where('job_position_id', $postId); }
+            //         if (!is_null($lvlId))   { $emp->where('job_level_id', $lvlId); }
+            //     });
+            // })
             ->get();
 
         return [
-            'roles' => $roles,
-            'companies' => $companies,
-            'departements' => $departements,
+            'roles'         => $roles,
+            'companies'     => $companies,
+            'departements'  => $departements,
             'job_positions' => $jobPositions,
-            'job_levels' => $jobLevels,
-            'users' => $users,
+            'job_levels'    => $jobLevels,
+            'users'         => $users,
         ];
     }
+
+    /**
+     * Normalisasi ID ke integer atau null.
+     * - Menerima: int|string|null
+     * - Menganggap '', '0', 0, 'null', 'NULL', 'NaN', 'undefined' sebagai null.
+     * - Mengembalikan int untuk string numerik (mis. '12' -> 12).
+     */
+    private function toNullableId(int|string|null $value): ?int
+    {
+        if (is_null($value)) return null;
+
+        if (is_string($value)) {
+            $trimmed = trim($value);
+
+            // nilai-nilai yang dianggap "kosong"
+            $empties = ['', '0', 'null', 'NULL', 'NaN', 'undefined'];
+            if (in_array($trimmed, $empties, true)) {
+                return null;
+            }
+
+            // string numerik positif
+            if (ctype_digit($trimmed)) {
+                $intVal = (int) $trimmed;
+                return $intVal > 0 ? $intVal : null;
+            }
+
+            // kalau bukan numerik, anggap null
+            return null;
+        }
+
+        // integer asli
+        return $value > 0 ? $value : null;
+    }
+
 
     public function create(array $data): mixed
     {
