@@ -3,6 +3,7 @@
 namespace App\HrisModule\Repositories;
 
 use App\Console\Support\DoSpaces;
+use App\Console\Support\Logger;
 use App\GeneralModule\Models\Company;
 use App\GeneralModule\Models\User;
 use App\HrisModule\Models\Departement;
@@ -161,13 +162,51 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
     {
         $userId = Auth::id();
 
-        $results = DB::select("CALL QrAttendance(?, ?, ?)", [
-            $userId,
-            $typePresence,
-            $idToken
-        ]);
+        try {
+            $results = DB::select("CALL QrAttendance(?, ?, ?)", [
+                $userId,
+                $typePresence,
+                $idToken
+            ]);
 
-        return collect($results[0]);
+            // ubah hasil stdClass jadi array
+            $data = (array) ($results[0] ?? []);
+
+            // ambil model dari id yang sudah ada di hasil SP
+            $model = UserAttendance::find($data['user_attendance_id'] ?? null);
+
+            // tambahkan field date
+            $data['date'] = now()->format('Y-m-d');
+
+            // simpan log
+            if ($model) {
+                Logger::log('attendance_qrcode_' . $typePresence, $model, $data);
+            }
+
+            return collect($data);
+
+        } catch (\Throwable $e) {
+            // kalau error, kita tetap kembalikan collection berisi info error
+            $errorData = [
+                'status'   => 'error',
+                'message'  => $e->getMessage(),
+                'code'     => $e->getCode(),
+                'date'     => now()->format('Y-m-d'),
+                'presence' => $typePresence,
+                'token'    => $idToken,
+            ];
+
+            // kalau masih bisa ambil UserAttendance, simpan log error juga
+            $model = UserAttendance::where('user_id', $userId)
+                ->orderByDesc('id')
+                ->first();
+
+            if ($model) {
+                Logger::log('attendance_qrcode_' . $typePresence . '_error', $model, $errorData);
+            }
+
+            return collect($errorData);
+        }
     }
 
     private function buildAttendanceData($attendance, $type_presence, $currentTime, $company, $statusInOut, $userId, $scheduleId = null)
