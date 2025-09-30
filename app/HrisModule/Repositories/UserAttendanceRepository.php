@@ -85,6 +85,7 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
     public function form(?int $companyId, ?int $deptId, ?int $userId): array
     {
         ini_set('memory_limit', '512M');
+        ini_set('max_execution_time', '0');
         // 1. Fetch Company Data
         $companyData = Company::query()
             ->when($companyId, fn($query) => $query->where('id', $companyId))
