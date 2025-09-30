@@ -56,8 +56,8 @@ class UserAttendanceRequest extends FormRequest
             'image_out' => ['nullable', 'image', 'mimes:jpeg,png,jpg,svg,webp', 'max:5048'],
 
             // status — silakan sesuaikan enum berikut dengan kebutuhan bisnis
-            'status_in'  => ['required', 'string', 'max:255', Rule::in(['present', 'late', 'absent', 'excused'])],
-            'status_out' => ['required', 'string', 'max:255', Rule::in(['present', 'early', 'overtime', 'excused'])],
+            'status_in'  => ['required', 'string', 'max:255', Rule::in(['normal', 'late', 'unlate'])],
+            'status_out' => ['required', 'string', 'max:255', Rule::in(['normal', 'late', 'unlate'])],
 
             // metadata
             'created_by' => ['nullable', 'integer', 'exists:users,id'],
