@@ -120,10 +120,10 @@ class UserAttendanceController extends BaseController
             "success"=> true,
             "message"=> "QR Code berhasil dibuat",
             "data"=> [
-                "id"=> $proses->id,
+                "id"=> (string)$proses->id,
                 "type"=> $proses->type,
-                "departement_id"=> $proses->departement_id,
-                "timework_id"=> $proses->timework_id,
+                "departement_id"=> (string)$proses->departement_id,
+                "timework_id"=> (string)$proses->timework_id,
                 "token"=> $proses->token,
                 "for_presence"=> $proses->for_presence->timezone('Asia/Jakarta')->toDateTimeString(),
                 "expires_at"=> $proses->expires_at->timezone('Asia/Jakarta')->toDateTimeString(),
