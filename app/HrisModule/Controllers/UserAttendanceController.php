@@ -117,14 +117,19 @@ class UserAttendanceController extends BaseController
         $proses = $this->service->presence_form_generate_qr($validated['departement_id'], $validated['shift_id'], $validated['type']);
 
         return response()->json([
-            'type' => $proses->type,
-            'departement_id' => $proses->departement_id,
-            'timework_id' => $proses->timework_id,
-            'for_presence' => $proses->for_presence->timezone('Asia/Jakarta')->toDateTimeString(),
-            'expires_at' => $proses->expires_at->timezone('Asia/Jakarta')->toDateTimeString(),
-            'updated_at' => optional($proses->updated_at)->timezone('Asia/Jakarta')->toDateTimeString(),
-            'created_at' => optional($proses->created_at)->timezone('Asia/Jakarta')->toDateTimeString(),
-            'id' => $proses->id,
+            "success"=> true,
+            "message"=> "QR Code berhasil dibuat",
+            "data"=> [
+                "id"=> $proses->id,
+                "type"=> $proses->type,
+                "departement_id"=> $proses->departement_id,
+                "timework_id"=> $proses->timework_id,
+                "token"=> $proses->token,
+                "for_presence"=> $proses->for_presence->timezone('Asia/Jakarta')->toDateTimeString(),
+                "expires_at"=> $proses->expires_at->timezone('Asia/Jakarta')->toDateTimeString(),
+                "created_at"=> $proses->created_at->timezone('Asia/Jakarta')->toDateTimeString(),
+                "updated_at"=> $proses->updated_at->timezone('Asia/Jakarta')->toDateTimeString()
+        ]
         ]);
     }
 
