@@ -117,41 +117,63 @@ class UserAttendanceService
         return $this->repo->create($data);
     }
 
-    public function presence_form_frd(?int $company_id, ?int $departement_id, ?int $timework_id, ?int $nip): array
-    {
+    public function presence_form_frd(
+        ?int $companyId,
+        ?int $departmentId,
+        ?int $timeworkId,
+        ?string $nip // ubah ke string agar aman untuk LIKE
+    ): array {
+        // 1) Master data
         $companies = Company::all();
+
         $departments = Departement::query()
-            ->when($company_id, fn($query) => $query->where('company_id', $company_id))
+            ->when($companyId !== null, fn ($q) => $q->where('company_id', $companyId))
             ->get();
+
+        // 2) Shifts / timeworks
         $shifts = TimeWorke::query()
-            ->when($company_id && $departement_id, function ($query) use ($company_id, $departement_id) {
-                $query->where('company_id', $company_id)
-                    ->where('departemen_id', $departement_id);
-            }, function ($query) {
-                $query->with(['company', 'departement']);
-            })
+            // filter spesifik jika company & department tersedia
+            ->when(
+                $companyId !== null && $departmentId !== null,
+                fn ($q) => $q->where('company_id', $companyId)
+                            ->where('departemen_id', $departmentId) // pastikan nama kolom sesuai
+            )
+            // jika parameter timework dikirim, filter by id
+            ->when($timeworkId !== null, fn ($q) => $q->whereKey($timeworkId))
+            // jika filter di atas tidak aktif, eager-load relasi agar tetap efisien
+            ->when(
+                $companyId === null || $departmentId === null,
+                fn ($q) => $q->with(['company', 'departement']) // pastikan nama relasi sesuai
+            )
             ->get();
+
+        // 3) Tipe absen
         $types = [
             ['name' => 'Masuk', 'value' => 'in'],
             ['name' => 'Pulang', 'value' => 'out'],
         ];
-        $query = User::query();
-        if ($company_id && $departement_id) {
-            $query->where('company_id', $company_id)
-                ->whereHas('employee', function ($employeeQuery) use ($departement_id) {
-                    $employeeQuery->where('departement_id', $departement_id);
-                });
-        }
-        if ($nip) {
-            $query->where('nip', 'like', '%' . $nip . '%');
-        }
-        $users = $query->get();
+
+        // 4) Users
+        $users = User::query()
+            ->when(
+                $companyId !== null && $departmentId !== null,
+                function ($q) use ($companyId, $departmentId) {
+                    $q->where('company_id', $companyId)
+                    ->whereHas('employee', fn ($e) => $e->where('departement_id', $departmentId)); // cek kolom
+                }
+            )
+            ->when(
+                $nip !== null && $nip !== '',
+                fn ($q) => $q->where('nip', 'like', '%' . $nip . '%')
+            )
+            ->get();
+
         return [
-            'companies' => $companies,
+            'companies'   => $companies,
             'departments' => $departments,
-            'shifts' => $shifts,
-            'types' => $types,
-            'users' => $users,
+            'shifts'      => $shifts,
+            'types'       => $types,
+            'users'       => $users,
         ];
     }
 

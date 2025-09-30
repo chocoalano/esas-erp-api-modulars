@@ -209,53 +209,6 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
         }
     }
 
-    private function buildAttendanceData($attendance, $type_presence, $currentTime, $company, $statusInOut, $userId, $scheduleId = null)
-    {
-        $data = [
-            'updated_at' => $currentTime,
-            'created_by' => $userId,
-            'updated_by' => $type_presence === 'out' ? $userId : null,
-        ];
-
-        if ($attendance) {
-            if ($type_presence === 'in') {
-                $data = array_merge($data, [
-                    'time_in' => $currentTime,
-                    'status_in' => $statusInOut,
-                    'lat_in' => $company->latitude,
-                    'long_in' => $company->longitude,
-                    'type_in' => 'qrcode',
-                ]);
-            } else {
-                $data = array_merge($data, [
-                    'time_out' => $currentTime,
-                    'status_out' => $statusInOut,
-                    'lat_out' => $company->latitude,
-                    'long_out' => $company->longitude,
-                    'type_out' => 'qrcode',
-                ]);
-            }
-        } else {
-            $data = array_merge($data, [
-                'user_id' => $userId,
-                'user_timework_schedule_id' => $scheduleId,
-                'created_at' => $currentTime,
-                'time_in' => $type_presence === 'in' ? $currentTime : null,
-                'status_in' => $type_presence === 'in' ? $statusInOut : 'normal',
-                'lat_in' => $type_presence === 'in' ? $company->latitude : null,
-                'long_in' => $type_presence === 'in' ? $company->longitude : null,
-                'type_in' => $type_presence === 'in' ? 'qrcode' : null,
-                'time_out' => $type_presence === 'out' ? $currentTime : null,
-                'status_out' => $type_presence === 'out' ? $statusInOut : 'normal',
-                'lat_out' => $type_presence === 'out' ? $company->latitude : null,
-                'long_out' => $type_presence === 'out' ? $company->longitude : null,
-                'type_out' => $type_presence === 'out' ? 'qrcode' : null,
-            ]);
-        }
-
-        return $data;
-    }
-
     public function in(array $data): mixed
     {
         $userid = $data['user_id'] ?? Auth::id();
@@ -263,7 +216,7 @@ class UserAttendanceRepository implements UserAttendanceRepositoryInterface
             ->model
             ->where('user_id', $userid)
             ->whereNotNull('time_in')
-            ->whereDate('created_at', now()->format('Y-m-d'))
+            ->where('date_presence', now()->format('Y-m-d'))
             ->exists();
         if ($cek) {
             throw new Exception("Anda sudah melakukan absen masuk hari ini!", 1);
