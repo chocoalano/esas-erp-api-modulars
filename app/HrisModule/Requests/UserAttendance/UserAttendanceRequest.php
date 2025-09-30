@@ -46,10 +46,10 @@ class UserAttendanceRequest extends FormRequest
             'type_out' => ['required', 'string', 'max:255', Rule::in(['qrcode', 'face-device', 'face-geolocation'])],
 
             // koordinat: angka + batas lat/long valid + presisi desimal
-            'lat_in'   => ['required', 'numeric', 'between:-90,90',  'decimal:0,8'],
-            'lat_out'  => ['required', 'numeric', 'between:-90,90',  'decimal:0,8'],
-            'long_in'  => ['required', 'numeric', 'between:-180,180','decimal:0,8'],
-            'long_out' => ['required', 'numeric', 'between:-180,180','decimal:0,8'],
+            'lat_in'   => ['required', 'numeric', 'between:-90,90',],
+            'lat_out'  => ['required', 'numeric', 'between:-90,90',],
+            'long_in'  => ['required', 'numeric', 'between:-180,180',],
+            'long_out' => ['required', 'numeric', 'between:-180,180',],
 
             // file gambar opsional
             'image_in'  => ['nullable', 'image', 'mimes:jpeg,png,jpg,svg,webp', 'max:5048'],
