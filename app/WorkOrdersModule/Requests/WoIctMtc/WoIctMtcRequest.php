@@ -4,7 +4,7 @@ namespace App\WorkOrdersModule\Requests\WoIctMtc;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class woIctMtcRequest extends FormRequest
+class WoIctMtcRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.

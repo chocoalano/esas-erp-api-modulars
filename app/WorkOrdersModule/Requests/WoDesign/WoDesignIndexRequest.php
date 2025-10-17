@@ -4,7 +4,7 @@ namespace App\WorkOrdersModule\Requests\WoDesign;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class woDesignIndexRequest extends FormRequest
+class WoDesignIndexRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.

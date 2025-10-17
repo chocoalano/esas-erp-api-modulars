@@ -33,32 +33,30 @@ class AuthRepository implements AuthRepositoryInterface
                 'salaries',
                 'employee',
             ])
-            ->where('nip', $input['nip'])
+            ->where('nip', $input['nip'] ?? null)
             ->first();
 
-        if (!$user || !Hash::check($input['password'], $user->password)) {
-            throw ValidationException::withMessages([
-                'password' => ['The provided credentials are incorrect.'],
-            ]);
+        if (!$user) {
+            throw ValidationException::withMessages(['User dengan NIP tersebut tidak ditemukan.']);
         }
 
-        // Cek device info jika dikirim
-        if (isset($input['device_info'])) { // Check if 'device_info' key exists in $input
-            if (!empty($input['device_info']) && !is_null($user->device_id)) {
-                if ($user->device_id !== $input['device_info']) {
-                    return response()->json([
-                        'message' => 'Unrecognized device. Access denied.',
-                    ], 403);
-                }
-            } else {
-                // This block will only execute if 'device_info' exists but is empty or user->device_id is null
-                if (!empty($input['device_info'])) { // Double-check if it's not empty before updating
-                    $user->update(['device_id' => $input['device_info']]);
-                }
-            }
+        if (!Hash::check($input['password'] ?? '', $user->password)) {
+            throw ValidationException::withMessages(['Password yang diberikan salah.']);
         }
 
-        // Buat token
+        // Device info check
+        // if (array_key_exists('device_info', $input)) {
+        //     $deviceInfo = $input['device_info'];
+        //     if (!empty($deviceInfo)) {
+        //         if ($user->device_id && $user->device_id !== $deviceInfo) {
+        //             throw ValidationException::withMessages(['Perangkat tidak dikenali. Akses ditolak.']);
+        //         }
+        //         if (!$user->device_id) {
+        //             $user->update(['device_id' => $deviceInfo]);
+        //         }
+        //     }
+        // }
+
         $token = $user->createToken('api-token')->plainTextToken;
 
         return [
