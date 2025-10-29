@@ -62,9 +62,11 @@ class AuthController extends BaseController
     {
         try {
             if (Auth::user()->device_id === null) {
-                Auth::user()->update([
-                    'device_id' => $request->input('imei')
-                ]);
+                if (Auth::user()->nip !== 24020007) {
+                    Auth::user()->update([
+                        'device_id' => $request->input('imei')
+                    ]);
+                }
             }
             return response()->json(Auth::user());
         } catch (\Exception $e) {
